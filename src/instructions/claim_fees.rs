@@ -7,6 +7,7 @@ use crate::state::{GlobalConfig, PoolState};
 
 pub fn claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
     let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     let pool = &ctx.accounts.pool_state;
 
     // Only current_authority may claim

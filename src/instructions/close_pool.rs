@@ -29,6 +29,8 @@ use crate::state::{GlobalConfig, PoolState};
 
 pub fn close_pool(ctx: Context<ClosePool>) -> Result<()> {
     let pool = &ctx.accounts.pool_state;
+    let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
 
     // Cannot close a graduated pool — that's a DEX position now
     require!(!pool.graduated, BondingError::AlreadyGraduated);

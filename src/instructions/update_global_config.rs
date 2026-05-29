@@ -36,6 +36,12 @@ pub struct UpdateGlobalConfigParams {
     pub graduation_sol_threshold: Option<u64>,
     /// New minimum creator reserve in lamports (None = unchanged)
     pub min_creator_reserve: Option<u64>,
+    /// New max SOL trade size (None = unchanged)
+    pub max_trade_sol: Option<u64>,
+    /// New max token trade size (None = unchanged)
+    pub max_trade_tokens: Option<u64>,
+    /// New max price impact in bps (None = unchanged, 10000 = 100%)
+    pub max_price_impact_bps: Option<u64>,
     /// Set paused state (None = unchanged)
     pub paused: Option<bool>,
     /// Transfer authority to a new admin (None = unchanged)
@@ -54,7 +60,16 @@ pub fn update_global_config(
         BondingError::Unauthorized
     );
 
-    // Apply fee_basis_points — cap at 500 (5%) to protect users
+    // Validate new config parameters (if provided)
+    if let Some(max_trade_sol) = params.max_trade_sol {
+        require!(max_trade_sol > 0 && max_trade_sol <= MAX_TRADE_SOL, BondingError::InvalidConfig);
+    }
+    if let Some(max_trade_tokens) = params.max_trade_tokens {
+        require!(max_trade_tokens > 0 && max_trade_tokens <= MAX_TRADE_TOKENS, BondingError::InvalidConfig);
+    }
+    if let Some(max_price_impact_bps) = params.max_price_impact_bps {
+        require!(max_price_impact_bps <= 10_000, BondingError::InvalidConfig);
+    }
     if let Some(fee_bps) = params.fee_basis_points {
         require!(fee_bps <= 500, BondingError::InvalidFeeConfig);
         config.fee_basis_points = fee_bps;

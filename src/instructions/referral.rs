@@ -77,8 +77,10 @@ pub fn create_referral_config(
     ctx: Context<CreateReferralConfig>,
     referral_share_bps: u16,
 ) -> Result<()> {
+    let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     require!(
-        ctx.accounts.platform_authority.key() == ctx.accounts.global_config.authority,
+        ctx.accounts.platform_authority.key() == config.authority,
         BondingError::Unauthorized
     );
     require!(referral_share_bps <= 10_000, BondingError::InvalidFeeConfig);
@@ -102,6 +104,8 @@ pub fn set_referral_active(
     ctx: Context<SetReferralActive>,
     active: bool,
 ) -> Result<()> {
+    let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     require!(
         ctx.accounts.platform_authority.key() == ctx.accounts.global_config.authority,
         BondingError::Unauthorized

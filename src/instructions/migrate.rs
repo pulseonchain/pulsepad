@@ -28,6 +28,7 @@ use crate::state::{GlobalConfig, MigrationConfig, MigrationTarget, PoolState};
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn migrate(ctx: Context<Migrate>) -> Result<()> {
     let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     let pool   = &mut ctx.accounts.pool_state;
     let migration_config = &ctx.accounts.migration_config;
 

@@ -27,11 +27,28 @@ pub fn create_token(
     migration_target: MigrationTarget,
 ) -> Result<()> {
     let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     require!(!config.paused, BondingError::Paused);
-    require!(name.len() <= 32,  BondingError::NameTooLong);
-    require!(symbol.len() <= 10, BondingError::SymbolTooLong);
-    require!(uri.len() <= 200,  BondingError::UriTooLong);
+    // Validate name: ASCII, 1-32 chars, no spaces
+    require!(name.len() >= 1 && name.len() <= 32,  BondingError::NameTooLong);
+    require!(name.is_ascii(), BondingError::InvalidName);
+    require!(!name.bytes().any(|b| b.is_ascii_control() || b == b' '), BondingError::InvalidName);
+
+    // Validate symbol: ASCII, 1-10 chars, uppercase only
+    require!(symbol.len() >= 1 && symbol.len() <= 10, BondingError::SymbolTooLong);
+    require!(symbol.is_ascii(), BondingError::InvalidSymbol);
+    require!(symbol.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()), BondingError::InvalidSymbol);
+
+    // Validate URI: ASCII, <= 200 chars, valid URL format
+    require!(uri.len() >= 1 && uri.len() <= 200, BondingError::UriTooLong);
+    require!(uri.is_ascii(), BondingError::InvalidUri);
+    require!(uri.starts_with("https://") || uri.starts_with("http://"), BondingError::InvalidUri);
+
+    // Validate migration target
     migration_target.validate()?;
+    require!(matches!(migration_target, MigrationTarget::MeteoraDammV1 { .. } | MigrationTarget::MeteoraDlmm { .. }) ||
+             !migration_target.has_ongoing_fees(),
+             BondingError::InvalidMigrationConfig);
 
     let mint_key    = ctx.accounts.mint.key();
     let creator_key = ctx.accounts.creator.key();

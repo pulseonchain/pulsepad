@@ -6,9 +6,17 @@ pub mod events;
 pub mod instructions;
 pub mod math;
 pub mod state;
+pub mod security;
+pub mod invariants;
+pub mod analytics;
+pub mod economics;
+pub mod upgrades;
+pub mod compliance;
+pub mod utils;
 
 use instructions::*;
 use state::MigrationTarget;
+use crate::utils::Feature;
 
 // Replace with your actual program ID after `anchor build`
 declare_id!("5NLh9rQPR4EAZZpZfAJ3ujszffKjMJJCEGXxCBf4CRea");
@@ -17,16 +25,16 @@ declare_id!("5NLh9rQPR4EAZZpZfAJ3ujszffKjMJJCEGXxCBf4CRea");
 pub mod cto_bonding {
     use super::*;
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  CORE INSTRUCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
     // ─── Admin ────────────────────────────────────────────────────────────────
-    /// One-time setup: creates the GlobalConfig PDA.
-    /// Must be called by the platform wallet before any tokens can be created.
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         instructions::initialize::initialize(ctx)
     }
 
     // ─── Token Creation (3-step to stay within SBF stack limits) ──────────────
-    /// Step 1: Creates mint, metadata, and pool state.
-    /// Call create_token_accounts (step 1b) and initialize_pool (step 2) after.
     pub fn create_token(
         ctx: Context<CreateToken>,
         name: String,
@@ -37,20 +45,14 @@ pub mod cto_bonding {
         instructions::create_token::create_token(ctx, name, symbol, uri, migration_target)
     }
 
-    /// Step 1b: Creates pool token account and LP reserve account.
-    /// Must be called after create_token and before create_staker_vault.
     pub fn create_token_accounts(ctx: Context<CreateTokenAccounts>) -> Result<()> {
         instructions::create_token::create_token_accounts(ctx)
     }
 
-    /// Step 1c: Creates staker vault, fee vault, fee recipient, and migration vault.
-    /// Must be called after create_token_accounts and before initialize_pool.
     pub fn create_staker_vault(ctx: Context<CreateStakerVault>) -> Result<()> {
         instructions::create_token::create_staker_vault(ctx)
     }
 
-    /// Step 2: Mint 700M bonding + 97M reserve + 300M LP tokens, revoke mint authority,
-    /// and deposit initial SOL. Must be called after create_staker_vault.
     pub fn initialize_pool(
         ctx: Context<InitializePool>,
         initial_sol_deposit: u64,
@@ -59,9 +61,6 @@ pub mod cto_bonding {
     }
 
     // ─── Trading ──────────────────────────────────────────────────────────────
-    /// Buy tokens from the bonding curve.
-    /// Takes 1% fee from sol_amount: 0.75% to platform, 0.25% to creator.
-    /// Remaining 99% executes the constant-product swap.
     pub fn buy(
         ctx: Context<Buy>,
         sol_amount: u64,
@@ -70,8 +69,6 @@ pub mod cto_bonding {
         instructions::buy::buy(ctx, sol_amount, min_tokens_out)
     }
 
-    /// Sell tokens back to the bonding curve.
-    /// Takes 1% fee from gross SOL output: 0.75% to platform, 0.25% to creator.
     pub fn sell(
         ctx: Context<Sell>,
         token_amount: u64,
@@ -81,22 +78,15 @@ pub mod cto_bonding {
     }
 
     // ─── Graduation ───────────────────────────────────────────────────────────
-    /// Permissionless: graduates the token to the chosen DEX once 85 SOL is raised.
-    /// Sends 300M LP tokens + all SOL to the DEX pool.
-    /// Remaining bonding+reserve tokens: half burned, half sent to migration_vault.
     pub fn migrate(ctx: Context<Migrate>) -> Result<()> {
         instructions::migrate::migrate(ctx)
     }
 
     // ─── Creator Fee Management ───────────────────────────────────────────────
-    /// Claim accumulated creator fees from fee_recipient (Wallet 2).
-    /// Leaves 0.005 SOL minimum for future gas. Signer must be current_authority.
     pub fn claim_fees(ctx: Context<ClaimFees>) -> Result<()> {
         instructions::claim_fees::claim_fees(ctx)
     }
 
-    /// Permanently transfer fee-claiming authority to a new wallet.
-    /// Old wallet loses all access. New wallet takes full control immediately.
     pub fn transfer_authority(
         ctx: Context<TransferAuthority>,
         new_authority: Pubkey,
@@ -104,40 +94,28 @@ pub mod cto_bonding {
         instructions::transfer_authority::transfer_authority(ctx, new_authority)
     }
 
-    // ─── Post-Graduation LP Fee Claiming ─────────────────────────────────────
-    /// Permissionless crank: claims LP fees from Raydium or PumpSwap (Hold LP mode).
-    /// Splits claimed SOL 0.75% to platform, 0.25% to creator fee_recipient.
     pub fn claim_lp_fees(ctx: Context<ClaimLpFees>) -> Result<()> {
         instructions::claim_lp_fees::claim_lp_fees(ctx)
     }
 
-    // ─── Migration Vault ─────────────────────────────────────────────────────
-    /// Claim tokens from the migration vault (half of remaining tokens at migration).
-    /// Only callable by current_authority after graduation.
     pub fn claim_migration_vault(ctx: Context<ClaimMigrationVault>) -> Result<()> {
         instructions::claim_migration_vault::claim_migration_vault(ctx)
     }
 
     // ─── Staking ──────────────────────────────────────────────────────────────
-    /// Stake tokens to earn a share of post-graduation creator fees.
-    /// Only relevant for Meteora targets with staker_share > 0.
     pub fn stake(ctx: Context<Stake>, amount: u64) -> Result<()> {
         instructions::stake::stake(ctx, amount)
     }
 
-    /// Unstake tokens. Snapshots any pending rewards before reducing stake.
     pub fn unstake(ctx: Context<Unstake>, amount: u64) -> Result<()> {
         instructions::unstake::unstake(ctx, amount)
     }
 
-    /// Claim pending staker SOL rewards.
     pub fn claim_staker_rewards(ctx: Context<ClaimStakerRewards>) -> Result<()> {
         instructions::claim_staker_rewards::claim_staker_rewards(ctx)
     }
 
     // ─── Admin Extensions ──────────────────────────────────────────────────────
-    /// Update global config parameters (admin only).
-    /// Every field is optional — pass None to keep the existing value.
     pub fn update_global_config(
         ctx: Context<UpdateGlobalConfig>,
         params: instructions::update_global_config::UpdateGlobalConfigParams,
@@ -145,16 +123,11 @@ pub mod cto_bonding {
         instructions::update_global_config::update_global_config(ctx, params)
     }
 
-    /// Close a non-graduated pool. Burns all tokens, returns SOL to creator.
-    /// Requires both platform authority AND creator to co-sign.
     pub fn close_pool(ctx: Context<ClosePool>) -> Result<()> {
         instructions::close_pool::close_pool(ctx)
     }
 
     // ─── Whitelist Presale ──────────────────────────────────────────────────────
-    /// Whitelist-gated buy during the presale phase.
-    /// Requires a valid Merkle proof that the buyer is on the whitelist.
-    /// Supports per-wallet caps and optional discounted fees.
     pub fn whitelist_buy(
         ctx: Context<WhitelistBuy>,
         sol_amount: u64,
@@ -165,7 +138,6 @@ pub mod cto_bonding {
     }
 
     // ─── Referral System ────────────────────────────────────────────────────────
-    /// Create a referral config for a partner wallet (platform admin only).
     pub fn create_referral_config(
         ctx: Context<CreateReferralConfig>,
         referral_share_bps: u16,
@@ -173,11 +145,350 @@ pub mod cto_bonding {
         instructions::referral::create_referral_config(ctx, referral_share_bps)
     }
 
-    /// Enable or disable a referral config (platform admin only).
     pub fn set_referral_active(
         ctx: Context<SetReferralActive>,
         active: bool,
     ) -> Result<()> {
         instructions::referral::set_referral_active(ctx, active)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  SECURITY MODULE INSTRUCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn init_reentrancy_guard(ctx: Context<InitReentrancyGuard>) -> Result<()> {
+        instructions::init_reentrancy_guard::init_reentrancy_guard(ctx)
+    }
+
+    pub fn enter_reentrancy_guard(ctx: Context<EnterReentrancyGuard>) -> Result<()> {
+        instructions::enter_reentrancy_guard::enter_reentrancy_guard(ctx)
+    }
+
+    pub fn exit_reentrancy_guard(ctx: Context<ExitReentrancyGuard>) -> Result<()> {
+        instructions::exit_reentrancy_guard::exit_reentrancy_guard(ctx)
+    }
+
+    pub fn init_circuit_breaker(ctx: Context<InitCircuitBreaker>) -> Result<()> {
+        instructions::init_circuit_breaker::init_circuit_breaker(ctx)
+    }
+
+    pub fn trigger_circuit_breaker(
+        ctx: Context<TriggerCircuitBreaker>,
+        duration_seconds: i64,
+    ) -> Result<()> {
+        instructions::trigger_circuit_breaker::trigger_circuit_breaker(ctx, duration_seconds)
+    }
+
+    pub fn reset_circuit_breaker(ctx: Context<ResetCircuitBreaker>) -> Result<()> {
+        instructions::reset_circuit_breaker::reset_circuit_breaker(ctx)
+    }
+
+    pub fn init_rate_limiter(ctx: Context<InitRateLimiter>) -> Result<()> {
+        instructions::init_rate_limiter::init_rate_limiter(ctx)
+    }
+
+    pub fn check_rate_limit(
+        ctx: Context<CheckRateLimit>,
+        sol_amount: u64,
+    ) -> Result<()> {
+        instructions::check_rate_limit::check_rate_limit(ctx, sol_amount)
+    }
+
+    pub fn init_address_filter(
+        ctx: Context<InitAddressFilter>,
+        filter_type: u8,
+    ) -> Result<()> {
+        instructions::init_address_filter::init_address_filter(ctx, filter_type)
+    }
+
+    pub fn remove_address_filter(ctx: Context<RemoveAddressFilter>) -> Result<()> {
+        instructions::remove_address_filter::remove_address_filter(ctx)
+    }
+
+    pub fn init_flash_loan_detector(ctx: Context<InitFlashLoanDetector>) -> Result<()> {
+        instructions::init_flash_loan_detector::init_flash_loan_detector(ctx)
+    }
+
+    pub fn record_flash_loan_check(
+        ctx: Context<RecordFlashLoanCheck>,
+        volume: u64,
+    ) -> Result<()> {
+        instructions::record_flash_loan_check::record_flash_loan_check(ctx, volume)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  ANALYTICS MODULE INSTRUCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn init_metrics(ctx: Context<InitMetrics>) -> Result<()> {
+        instructions::init_metrics::init_metrics(ctx)
+    }
+
+    pub fn record_buy_metrics(
+        ctx: Context<RecordBuyMetrics>,
+        sol_amount: u64,
+        tokens_out: u64,
+        platform_fee: u64,
+        creator_fee: u64,
+    ) -> Result<()> {
+        instructions::record_buy_metrics::record_buy_metrics(ctx, sol_amount, tokens_out, platform_fee, creator_fee)
+    }
+
+    pub fn record_sell_metrics(
+        ctx: Context<RecordSellMetrics>,
+        sol_amount: u64,
+        tokens_in: u64,
+        platform_fee: u64,
+        creator_fee: u64,
+    ) -> Result<()> {
+        instructions::record_sell_metrics::record_sell_metrics(ctx, sol_amount, tokens_in, platform_fee, creator_fee)
+    }
+
+    pub fn init_pool_health(ctx: Context<InitPoolHealth>) -> Result<()> {
+        instructions::init_pool_health::init_pool_health(ctx)
+    }
+
+    pub fn update_pool_health(
+        ctx: Context<UpdatePoolHealth>,
+    ) -> Result<()> {
+        instructions::update_pool_health::update_pool_health(ctx)
+    }
+
+    pub fn init_user_stats(ctx: Context<InitUserStats>) -> Result<()> {
+        instructions::init_user_stats::init_user_stats(ctx)
+    }
+
+    pub fn record_user_buy(
+        ctx: Context<RecordUserBuy>,
+        volume: u64,
+        fees: u64,
+    ) -> Result<()> {
+        instructions::record_user_buy::record_user_buy(ctx, volume, fees)
+    }
+
+    pub fn record_user_sell(
+        ctx: Context<RecordUserSell>,
+        volume: u64,
+        fees: u64,
+    ) -> Result<()> {
+        instructions::record_user_sell::record_user_sell(ctx, volume, fees)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  ECONOMICS MODULE INSTRUCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn init_dynamic_fees(ctx: Context<InitDynamicFees>) -> Result<()> {
+        instructions::init_dynamic_fees::init_dynamic_fees(ctx)
+    }
+
+    pub fn update_dynamic_fee(
+        ctx: Context<UpdateDynamicFee>,
+        sol_reserves: u64,
+        token_reserves: u64,
+        volatility_bps: u64,
+    ) -> Result<()> {
+        instructions::update_dynamic_fee::update_dynamic_fee(ctx, sol_reserves, token_reserves, volatility_bps)
+    }
+
+    pub fn init_liquidity_bootstrap(
+        ctx: Context<InitLiquidityBootstrap>,
+        duration_seconds: u64,
+    ) -> Result<()> {
+        instructions::init_liquidity_bootstrap::init_liquidity_bootstrap(ctx, duration_seconds)
+    }
+
+    pub fn get_bootstrap_pricing(
+        ctx: Context<GetBootstrapPricing>,
+    ) -> Result<()> {
+        instructions::get_bootstrap_pricing::get_bootstrap_pricing(ctx)
+    }
+
+    pub fn init_whale_protection(ctx: Context<InitWhaleProtection>) -> Result<()> {
+        instructions::init_whale_protection::init_whale_protection(ctx)
+    }
+
+    pub fn calculate_whale_fee(
+        ctx: Context<CalculateWhaleFee>,
+        trade_volume: u64,
+    ) -> Result<()> {
+        instructions::calculate_whale_fee::calculate_whale_fee(ctx, trade_volume)
+    }
+
+    pub fn init_fee_redistribution(ctx: Context<InitFeeRedistribution>) -> Result<()> {
+        instructions::init_fee_redistribution::init_fee_redistribution(ctx)
+    }
+
+    pub fn redistribute_fees(
+        ctx: Context<RedistributeFees>,
+        total_fees: u64,
+    ) -> Result<()> {
+        instructions::redistribute_fees::redistribute_fees(ctx, total_fees)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  UPGRADES MODULE INSTRUCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn init_upgradeable(ctx: Context<InitUpgradeable>) -> Result<()> {
+        instructions::init_upgradeable::init_upgradeable(ctx)
+    }
+
+    pub fn schedule_upgrade(
+        ctx: Context<ScheduleUpgrade>,
+        next_version: u32,
+        delay_seconds: u64,
+    ) -> Result<()> {
+        instructions::schedule_upgrade::schedule_upgrade(ctx, next_version, delay_seconds)
+    }
+
+    pub fn complete_upgrade(ctx: Context<CompleteUpgrade>) -> Result<()> {
+        instructions::complete_upgrade::complete_upgrade(ctx)
+    }
+
+    pub fn cancel_upgrade(ctx: Context<CancelUpgrade>) -> Result<()> {
+        instructions::cancel_upgrade::cancel_upgrade(ctx)
+    }
+
+    pub fn init_feature_flags(ctx: Context<InitFeatureFlags>) -> Result<()> {
+        instructions::init_feature_flags::init_feature_flags(ctx)
+    }
+
+    pub fn toggle_feature(
+        ctx: Context<ToggleFeature>,
+        feature: Feature,
+    ) -> Result<()> {
+        instructions::toggle_feature::toggle_feature(ctx, feature)
+    }
+
+    pub fn set_feature_bitmap(
+        ctx: Context<SetFeatureBitmap>,
+        bitmap: u128,
+    ) -> Result<()> {
+        instructions::set_feature_bitmap::set_feature_bitmap(ctx, bitmap)
+    }
+
+    pub fn init_plugin(
+        ctx: Context<InitPlugin>,
+        plugin_type: u8,
+        config_data: [u8; 256],
+    ) -> Result<()> {
+        instructions::init_plugin::init_plugin(ctx, plugin_type, config_data)
+    }
+
+    pub fn execute_plugin(
+        ctx: Context<ExecutePlugin>,
+    ) -> Result<()> {
+        instructions::execute_plugin::execute_plugin(ctx)
+    }
+
+    pub fn init_upgrade_path(ctx: Context<InitUpgradePath>) -> Result<()> {
+        instructions::init_upgrade_path::init_upgrade_path(ctx)
+    }
+
+    pub fn schedule_upgrade_path(
+        ctx: Context<ScheduleUpgradePath>,
+        version: u32,
+        scheduled_at: i64,
+        deadline: i64,
+        delay_seconds: u64,
+    ) -> Result<()> {
+        instructions::schedule_upgrade_path::schedule_upgrade_path(ctx, version, scheduled_at, deadline, delay_seconds)
+    }
+
+    pub fn execute_upgrade_path(
+        ctx: Context<ExecuteUpgradePath>,
+        version: u32,
+    ) -> Result<()> {
+        instructions::execute_upgrade_path::execute_upgrade_path(ctx, version)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  COMPLIANCE MODULE INSTRUCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn init_compliance(
+        ctx: Context<InitCompliance>,
+        kyc_required: bool,
+    ) -> Result<()> {
+        instructions::init_compliance::init_compliance(ctx, kyc_required)
+    }
+
+    pub fn check_compliance(
+        ctx: Context<CheckCompliance>,
+        kyc_expiry: i64,
+    ) -> Result<()> {
+        instructions::check_compliance::check_compliance(ctx, kyc_expiry)
+    }
+
+    pub fn init_audit_log(ctx: Context<InitAuditLog>) -> Result<()> {
+        instructions::init_audit_log::init_audit_log(ctx)
+    }
+
+    pub fn log_audit_event(
+        ctx: Context<LogAuditEvent>,
+        log_type: u8,
+        details: [u8; 64],
+    ) -> Result<()> {
+        instructions::log_audit_event::log_audit_event(ctx, log_type, details)
+    }
+
+    pub fn verify_whitelist_proof(
+        ctx: Context<VerifyWhitelistProof>,
+        inclusion_proof: Vec<u8>,
+        root_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::verify_whitelist_proof::verify_whitelist_proof(ctx, inclusion_proof, root_hash)
+    }
+
+    pub fn verify_referral_proof(
+        ctx: Context<VerifyReferralProof>,
+        referral_proof: Vec<u8>,
+        root_hash: [u8; 32],
+    ) -> Result<()> {
+        instructions::verify_referral_proof::verify_referral_proof(ctx, referral_proof, root_hash)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  INVARIANT CHECKER INSTRUCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn verify_pool_invariants(
+        ctx: Context<VerifyPoolInvariants>,
+    ) -> Result<()> {
+        instructions::verify_pool_invariants::verify_pool_invariants(ctx)
+    }
+
+    pub fn verify_math_operations(
+        ctx: Context<VerifyMathOps>,
+        before: u64,
+        after: u64,
+        change: u64,
+        operation: u8,
+    ) -> Result<()> {
+        instructions::verify_math_operations::verify_math_operations(ctx, before, after, change, operation)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  TIME-LOCKED AUTHORITY INSTRUCTION
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn schedule_authority_transfer(
+        ctx: Context<ScheduleAuthorityTransfer>,
+        new_authority: Pubkey,
+    ) -> Result<()> {
+        instructions::schedule_authority_transfer::schedule_authority_transfer(ctx, new_authority)
+    }
+
+    pub fn execute_authority_transfer(
+        ctx: Context<ExecuteAuthorityTransfer>,
+    ) -> Result<()> {
+        instructions::execute_authority_transfer::execute_authority_transfer(ctx)
+    }
+
+    pub fn cancel_authority_transfer(
+        ctx: Context<CancelAuthorityTransfer>,
+    ) -> Result<()> {
+        instructions::cancel_authority_transfer::cancel_authority_transfer(ctx)
     }
 }

@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use crate::consts::*;
+use crate::errors::BondingError;
 
 #[account]
 pub struct GlobalConfig {
@@ -10,6 +11,9 @@ pub struct GlobalConfig {
     pub creator_share_bps: u64,
     pub graduation_sol_threshold: u64,
     pub min_creator_reserve: u64,
+    pub max_trade_sol: u64,
+    pub max_trade_tokens: u64,
+    pub max_price_impact_bps: u64,
     pub paused: bool,
     pub bump: u8,
 }
@@ -39,6 +43,9 @@ impl GlobalConfig {
         self.creator_share_bps = CREATOR_SHARE_BPS;
         self.graduation_sol_threshold = GRADUATION_SOL_THRESHOLD;
         self.min_creator_reserve = MIN_CREATOR_RESERVE;
+        self.max_trade_sol = MAX_TRADE_SOL;
+        self.max_trade_tokens = MAX_TRADE_TOKENS;
+        self.max_price_impact_bps = 1000; // 10% max price impact
         self.paused = false;
         self.bump = bump;
     }
@@ -57,4 +64,18 @@ impl GlobalConfig {
         let creator_fee = total_fee.checked_sub(platform_fee).unwrap_or(0);
         (total_fee, platform_fee, creator_fee)
     }
+
+    /// Validate that config parameters are within reasonable bounds
+    pub fn validate(&self) -> Result<()> {
+        require!(self.fee_basis_points <= MAX_FEE_BPS, BondingError::InvalidFeeConfig);
+        require!(self.platform_share_bps + self.creator_share_bps == self.fee_basis_points,
+            BondingError::InvalidFeeConfig);
+        require!(self.max_trade_sol > 0 && self.max_trade_sol <= MAX_TRADE_SOL,
+            BondingError::InvalidConfig);
+        require!(self.max_trade_tokens > 0 && self.max_trade_tokens <= MAX_TRADE_TOKENS,
+            BondingError::InvalidConfig);
+        require!(self.max_price_impact_bps <= 10_000, BondingError::InvalidConfig);
+        Ok(())
+    }
+
 }

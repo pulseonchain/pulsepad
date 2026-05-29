@@ -14,6 +14,7 @@ use crate::state::{GlobalConfig, MigrationTarget, PoolState, StakerVault};
 // ─────────────────────────────────────────────────────────────────────────────
 pub fn claim_lp_fees(ctx: Context<ClaimLpFees>) -> Result<()> {
     let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     let pool = &ctx.accounts.pool_state;
 
     require!(pool.graduated, BondingError::NotReadyToGraduate);

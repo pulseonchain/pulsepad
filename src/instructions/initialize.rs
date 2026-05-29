@@ -16,6 +16,7 @@ pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         platform_wallet,
         bump,
     );
+    config.validate()?; // Ensure config parameters are valid
 
     msg!("GlobalConfig initialized. Platform: {}", platform_wallet);
     Ok(())

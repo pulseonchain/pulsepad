@@ -8,17 +8,36 @@ use crate::consts::*;
 use crate::errors::BondingError;
 use crate::events::SellEvent;
 use crate::state::{GlobalConfig, PoolState};
+use crate::math;
 
 pub fn sell(ctx: Context<Sell>, token_amount: u64, min_sol_out: u64) -> Result<()> {
     let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     require!(!config.paused, BondingError::Paused);
-    require!(token_amount > 0, BondingError::ZeroTokenAmount);
+    
+    let pool = &mut ctx.accounts.pool_state;
+    require!(!pool.graduated, BondingError::AlreadyGraduated);
+    require!(pool.virtual_sol_reserves > 0 && pool.virtual_token_reserves > 0, BondingError::InvalidPoolState);
+    require!(pool.real_sol_reserves > 0, BondingError::InsufficientPoolSol);
+    
+    require!(token_amount > 0 && token_amount <= MAX_TRADE_TOKENS, BondingError::ZeroTokenAmount);
+    require!(token_amount <= config.max_trade_tokens, BondingError::ZeroTokenAmount);
+
 
     let pool = &mut ctx.accounts.pool_state;
     require!(!pool.graduated, BondingError::AlreadyGraduated);
 
     // ── 1. Calculate gross SOL out from bonding curve ─────────────────────────
     let sol_out_gross = pool.calc_sell(token_amount)?;
+    
+    // Calculate price impact
+    let impact_bps = math::sell_price_impact_bps(
+        pool.virtual_sol_reserves,
+        pool.virtual_token_reserves,
+        token_amount,
+        sol_out_gross,
+    );
+    require!(impact_bps <= config.max_price_impact_bps, BondingError::PriceImpactTooHigh);
 
     // ── 2. Calculate fees (taken from SOL output) ─────────────────────────────
     let (total_fee, platform_fee, creator_fee) = config.calc_fees(sol_out_gross);

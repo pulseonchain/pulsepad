@@ -37,6 +37,7 @@ pub fn whitelist_buy(
     merkle_proof: Vec<[u8; 32]>,
 ) -> Result<()> {
     let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     require!(!config.paused, BondingError::Paused);
     require!(sol_amount > 0, BondingError::ZeroSolAmount);
 

@@ -1,5 +1,3 @@
-use anchor_lang::prelude::*;
-
 // ─── Platform ────────────────────────────────────────────────────────────────
 pub const PLATFORM_WALLET: &str = "EobUZD7H6TQRYfzqKsYEYekpKoFinKW1UWA4TsHidTqj";
 
@@ -31,9 +29,12 @@ pub const GRADUATION_SOL_THRESHOLD: u64 = 85_000_000_000;  // 85 SOL in lamports
 pub const TOTAL_FEE_BPS: u64 = 100;        // 1 %   of every trade's SOL volume
 pub const PLATFORM_SHARE_BPS: u64 = 75;   // 0.75% → platform wallet (immediate)
 pub const CREATOR_SHARE_BPS: u64 = 25;    // 0.25% → fee_recipient PDA (claimable)
+pub const MAX_FEE_BPS: u64 = 500;         // 5% max fee (hard cap)
 
 // ─── Wallet 2 minimum reserve ─────────────────────────────────────────────────
 pub const MIN_CREATOR_RESERVE: u64 = 5_000_000; // 0.005 SOL — gas for future claims
+pub const MAX_TRADE_SOL: u64 = 10_000_000_000; // 10 SOL max trade size
+pub const MAX_TRADE_TOKENS: u64 = 1_000_000_000_000_000; // 1T tokens max trade size
 
 // ─── PDA Seeds ────────────────────────────────────────────────────────────────
 pub const SEED_GLOBAL_CONFIG: &[u8] = b"global_config";

@@ -8,6 +8,7 @@ use crate::consts::*;
 use crate::errors::BondingError;
 use crate::events::BuyEvent;
 use crate::state::{GlobalConfig, MigrationConfig, MigrationTarget, PoolState};
+use crate::math;
 
 /// Buy tokens from the bonding curve.
 /// Takes 1% fee from sol_amount: 0.75% to platform, 0.25% to creator.
@@ -19,15 +20,31 @@ use crate::state::{GlobalConfig, MigrationConfig, MigrationTarget, PoolState};
 /// PDA so no external DEX accounts are needed.
 pub fn buy(ctx: Context<Buy>, sol_amount: u64, min_tokens_out: u64) -> Result<()> {
     let config = &ctx.accounts.global_config;
+    config.validate()?; // Ensure config parameters are valid
     require!(!config.paused, BondingError::Paused);
-    require!(sol_amount > 0, BondingError::ZeroSolAmount);
-
+    
     let pool = &mut ctx.accounts.pool_state;
     require!(!pool.graduated, BondingError::AlreadyGraduated);
+    require!(pool.virtual_sol_reserves > 0 && pool.virtual_token_reserves > 0, BondingError::InvalidPoolState);
+    require!(pool.real_token_reserves > 0 || pool.reserve_tokens_remaining > 0, BondingError::InsufficientPoolTokens);
+    
+    require!(sol_amount > 0 && sol_amount <= MAX_TRADE_SOL, BondingError::ZeroSolAmount);
+    require!(sol_amount <= config.max_trade_sol, BondingError::ZeroSolAmount);
 
     // ── 1. Calculate fees ─────────────────────────────────────────────────────
+    // Calculate fees and check price impact
     let (total_fee, platform_fee, creator_fee) = config.calc_fees(sol_amount);
     let net_sol = sol_amount.checked_sub(total_fee).ok_or(BondingError::MathOverflow)?;
+    
+    // Calculate price impact before executing trade
+    let tokens_out = pool.calc_buy(net_sol)?;
+    let impact_bps = math::buy_price_impact_bps(
+        pool.virtual_sol_reserves,
+        pool.virtual_token_reserves,
+        net_sol,
+        tokens_out,
+    );
+    require!(impact_bps <= config.max_price_impact_bps, BondingError::PriceImpactTooHigh);
 
     // ── 2. Calculate tokens out ───────────────────────────────────────────────
     let tokens_out = pool.calc_buy(net_sol)?;
