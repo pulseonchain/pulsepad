@@ -20,7 +20,7 @@ AGENT INFRA -> SOON
             │    (one PulseFactory on BNB Chain)      │
             │                                         │
             │  Creator launches ──►  CP curve trades  │
-            │              20, 50 or 85 BNB raised    │
+            │              15, 35 or 50 BNB raised    │
             │                           │             │
             │                ┌──────────┼──────────┐  │
             │                ▼          ▼          ▼  │
@@ -38,22 +38,69 @@ AGENT INFRA -> SOON
 ```
 
 1. **One bonding curve per token** — Each token gets its own `PulsePool` deployed via CREATE2 by `PulseFactory` on BSC.
-2. **Graduate to any BSC DEX** — When the bonding curve hits 85 BNB, it migrates liquidity to PancakeSwap V2, PancakeSwap V3, Thena V3, or Biswap V3.
+2. **Graduate to any BSC DEX** — When the bonding curve hits 50 BNB, it migrates liquidity to PancakeSwap V2, PancakeSwap V3, Thena V3, or Biswap V3.
 3. **BSC-native experience** — 3-second blocks, ~$0.15 per trade in gas, massive retail user base in Asia.
 4. **DAO governance** — Top token holders across ALL chains form a Community Board.
 5. **Fees fund development** — 1% per trade: 0.75% to `0xd479A4BC8993D3b76Ff52C7C0a01e62784842AfA`, 0.25% to creator.
 
 ---
 
+## Graduation Tiers (BSC)
+
+| Tier | Threshold | USD (@ $711 BNB) | Use Case |
+|------|-----------|------------------|----------|
+| **Fast** | 15 BNB | $10,670 | Quick launch, viral memes |
+| **Standard** | 35 BNB | $24,897 | Balanced price discovery |
+| **Stable** | 50 BNB | $35,561 | Deep liquidity, serious projects |
+
+## Anti-Snipe
+
+First 3 minutes & Bonding Guard: bonding curve virtual BNB is **3x**. Snipers pay 3x. Normal buyers are exempt through organic trading. this reduces Rugs and Bundling. 
+
+## Configurable Fees
+
+Pool creators set fees at 1%–5%. 
+## On-Chain Agents
+
+Optional at creation. Name format: `"Agent <TICKER>"`. Fees route to agent instead of creator. Agent claims every 3 hours. Buyback execution via `agentBuyback()`.
+
+## Partial Migration
+
+Keep 10%/20%/30% of BNB in a permanent buyback fund. Agent executes buys when price dips. Tokens burned or routed to treasury.
+
+## Vault Cap
+
+500K tokens per 24 hours — creators and agents both capped. 
+
 ## Current Status: Contracts Complete
 
 Full plan and audit: [PLAN.md](./PLAN.md)
 
-- `PulseGlobalConfig` — singleton config with 85 BNB graduation threshold
-- `PulseFactory` — CREATE2 factory on BSC (Chain 56)
-- `PulsePool` — full bonding curve + ERC-20 + staking + migration
-- `PulseToken` — ERC-20 with mint authority held by pool
-- 4 DEX adapters for BSC
+```
+PulseGlobalConfig (15/35/50 BNB tiers, 24h timelock)
+PulseFactory (CREATE2 immutable pools)
+PulsePool
+├── PulseToken (ERC-20, mint revoked)
+├── PrebondConfig (tier, fee, agent, anti-snipe)
+├── AgentWallet (optional, 3h claim cooldown)
+├── VaultClaimTracker (500K/24h cap)
+├── Bonding Curve + Partial Migration
+└── Staking
+```
+
+---
+## Defense-in-Depth
+
+| Layer | Value |
+|-------|-------|
+| Timelock | 24 hours on admin |
+| Circuit Breaker | 500 BNB/block, 10 tx/addr, 30min grad cooldown |
+| Immutable | No proxies, no upgrade path |
+| ReentrancyGuard | All state-changing functions |
+
+## API (api.jellychain.fun)
+
+`agent/claim` | `agent/buyback` | `agent/transfer` | `vault/claim` | `token/verify` | `agent/status`
 
 ---
 
@@ -81,7 +128,7 @@ price = virtual_bnb / virtual_tokens
 
 ### Graduation
 
-When `realBNBReserves >= 85 BNB`, the pool is eligible. `migrate()` is **permissionless**:
+When `realBNBReserves >= 50 BNB`, the pool is eligible. `migrate()` is **permissionless**:
 
 1. **300M LP tokens** → DEX via adapter
 2. **Remaining tokens**: 50% burned, 50% to migration vault (claimable by creator)
@@ -178,7 +225,7 @@ Every state change emits typed Solidity events:
 
 - `PoolInitialized` — token created, ready for trading
 - `Buy` / `Sell` — trade with fee breakdown, reserve splits
-- `GraduationReady` — 85 BNB threshold reached
+- `GraduationReady` — 50 BNB threshold reached
 - `Migrated` — graduation complete (burn, vault, DEX pool)
 - `FeesClaimed` / `AuthorityTransferred`
 - `Staked` / `Unstaked` / `StakerRewardsClaimed`
@@ -196,7 +243,7 @@ forge create --rpc-url $RPC_URL --private-key $KEY \
   contracts/PulseGlobalConfig.sol:PulseGlobalConfig \
   --constructor-args 85000000000000000000
 
-# 85 BNB threshold (85 * 10^18 wei)
+# 50 BNB threshold (50 * 10^18 wei)
 
 forge create --rpc-url $RPC_URL --private-key $KEY \
   contracts/PulseFactory.sol:PulseFactory \
