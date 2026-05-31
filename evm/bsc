@@ -1,7 +1,7 @@
 
 
 Pulse on 
-** BNB Smart Chain ** — a constant-product bonding curve protocol built in Solidity that lets any creator launch a token, run it through a bonding curve, and graduate it to **PancakeSwap, Thena, or Biswap** — not just one DEX.
+BNB Smart Chain  — a constant-product bonding curve protocol built in Solidity that lets any creator launch a token, run it through a bonding curve, and graduate it to PancakeSwap, Thena, or Biswap — not just one DEX.
 
 Each chain gets one `PulseFactory`, bonded tokens can migrate to four DEX launchpads on BSC, and the entire protocol feeds into a cross-chain DAO governed by top token holders.
 
@@ -12,7 +12,7 @@ Website: https://pulse.jelly-os.xyz/
 AGENT INFRA -> SOON 
 ---
 
-## The Big Idea (BSC Edition)
+##  BSC Edition
 
 ```
             ┌─────────────────────────────────────────┐
@@ -20,13 +20,13 @@ AGENT INFRA -> SOON
             │    (one PulseFactory on BNB Chain)      │
             │                                         │
             │  Creator launches ──►  CP curve trades  │
-            │                        85 BNB raised    │
-            │                            │             │
-            │                 ┌──────────┼──────────┐  │
-            │                 ▼          ▼          ▼  │
-            │           PancakeSwap  PancakeSwap  Thena│
-            │              V2          V3          V3  │
-            │                        Biswap V3         │
+            │              20, 50 or 85 BNB raised    │
+            │                           │             │
+            │                ┌──────────┼──────────┐  │
+            │                ▼          ▼          ▼  │
+            │          PancakeSwap  PancakeSwap  Thena│
+            │             V2          V3          V3  │
+            │                       Biswap V3         │
             └─────────────────────────────────────────┘
                                   │
                                   ▼
