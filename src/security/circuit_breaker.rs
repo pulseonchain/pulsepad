@@ -64,5 +64,4 @@ impl CircuitBreaker {
     }
 }
 
-/// Add already_paused and not_paused errors
 

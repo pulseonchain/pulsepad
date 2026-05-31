@@ -89,5 +89,4 @@ impl RateLimiter {
     }
 }
 
-/// Add rate limit errors
 

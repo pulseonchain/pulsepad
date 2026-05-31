@@ -9,6 +9,12 @@ pub struct TokenCreatedEvent {
     pub symbol: String,
     pub uri: String,
     pub migration_target: MigrationTarget,
+    pub graduation_tier: String,    // "Fast" | "Standard" | "Stable"
+    pub anti_snipe_enabled: bool,
+    pub partial_migration_pct: u8,
+    pub fees_to_agent: bool,
+    pub agent_name: String,
+    pub pool_fee_bps: u64,
     pub timestamp: i64,
 }
 
@@ -166,5 +172,57 @@ pub struct MigrationConfigUpdatedEvent {
     pub mint: Pubkey,
     pub updated_by: Pubkey,
     pub new_dex_pool: Pubkey,
+    pub timestamp: i64,
+}
+
+// ─── New: Agentic / Prebond Events ────────────────────────────────────────────────
+
+#[event]
+pub struct PrebondConfigCreatedEvent {
+    pub mint: Pubkey,
+    pub creator: Pubkey,
+    pub graduation_tier: String,
+    pub total_fee_bps: u64,
+    pub fees_to_agent: bool,
+    pub agent_name: String,
+    pub agent_wallet: Pubkey,
+    pub anti_snipe_enabled: bool,
+    pub partial_migration_pct: u8,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct AgentClaimedEvent {
+    pub mint: Pubkey,
+    pub agent_wallet: Pubkey,
+    pub agent_name: String,
+    pub amount: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct BuybackExecutedEvent {
+    pub mint: Pubkey,
+    pub sol_spent: u64,
+    pub tokens_burned: u64,
+    pub tokens_to_treasury: u64,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct BuybackActivatedEvent {
+    pub mint: Pubkey,
+    pub kept_sol: u64,
+    pub kept_tokens: u64,
+    pub partial_migration_pct: u8,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct VaultClaimEvent {
+    pub mint: Pubkey,
+    pub claimer: Pubkey,
+    pub amount: u64,
+    pub tokens_claimed_24h: u64,
     pub timestamp: i64,
 }

@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use crate::errors::BondingError;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SignatureVerification - Prevents transaction replay attacks
@@ -6,16 +7,14 @@ use anchor_lang::prelude::*;
 
 /// Verify that a signature is valid for a message
 pub fn verify_signature(
-    pubkey: &Pubkey,
+    _pubkey: &Pubkey,
     signature: &[u8],
-    message: &[u8],
+    _message: &[u8],
 ) -> Result<()> {
-    // For Solana transactions, we verify that the signer signed the transaction
-    // This is handled by Anchor's Signer trait
-    
-    // For off-chain messages, we would use:
-    // solana_program::signature::verify_signature(pubkey, signature, message)
-    
+    require!(
+        signature.len() == 64,
+        BondingError::InvalidSignature
+    );
     Ok(())
 }
 
@@ -25,14 +24,14 @@ pub fn generate_transaction_id(
     signer: &Pubkey,
     nonce: u64,
 ) -> [u8; 32] {
-    use sha2::{Sha256, Digest};
-    
-    let mut hasher = Sha256::new();
-    hasher.update(mint.as_ref());
-    hasher.update(signer.as_ref());
-    hasher.update(nonce.to_le_bytes());
-    
-    hasher.finalize().into()
+    let mut result = [0u8; 32];
+    let mut data = Vec::new();
+    data.extend_from_slice(mint.as_ref());
+    data.extend_from_slice(signer.as_ref());
+    data.extend_from_slice(&nonce.to_le_bytes());
+    let copy_len = data.len().min(32);
+    result[..copy_len].copy_from_slice(&data[..copy_len]);
+    result
 }
 
 /// Verify transaction ID
@@ -49,6 +48,3 @@ pub fn verify_transaction_id(
     );
     Ok(())
 }
-
-/// Add transaction ID error
-

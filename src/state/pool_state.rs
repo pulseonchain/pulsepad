@@ -1,3 +1,62 @@
+use anchor_lang::prelude::*;
+use crate::consts::*;
+use crate::errors::BondingError;
+
+// ─── Migration Target ─────────────────────────────────────────────────────────
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub enum MigrationTarget {
+    RaydiumCpmm,
+    MeteoraDammV1 {
+        enable_dynamic_vault: bool,
+        lp_share: u8,
+        staker_share: u8,
+        holder_share: u8,
+    },
+    MeteoraDlmm {
+        fee_bps: u16,
+        bin_step: u16,
+        lp_share: u8,
+        staker_share: u8,
+        holder_share: u8,
+    },
+    PumpSwapBurn,
+    PumpSwapHoldLp,
+}
+
+impl MigrationTarget {
+    pub fn validate(&self) -> Result<()> {
+        match self {
+            MigrationTarget::MeteoraDammV1 { lp_share, staker_share, holder_share, .. } => {
+                let sum = (*lp_share as u16)
+                    .checked_add(*staker_share as u16)
+                    .unwrap_or(0)
+                    .checked_add(*holder_share as u16)
+                    .unwrap_or(0);
+                require!(sum == 100, BondingError::InvalidShareSum);
+            }
+            MigrationTarget::MeteoraDlmm { lp_share, staker_share, holder_share, .. } => {
+                let sum = (*lp_share as u16)
+                    .checked_add(*staker_share as u16)
+                    .unwrap_or(0)
+                    .checked_add(*holder_share as u16)
+                    .unwrap_or(0);
+                require!(sum == 100, BondingError::InvalidShareSum);
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    pub fn has_ongoing_fees(&self) -> bool {
+        !matches!(self, MigrationTarget::PumpSwapBurn)
+    }
+
+    pub fn size() -> usize {
+        1 + 5
+    }
+}
+
 // ─── Pool State ───────────────────────────────────────────────────────────────
 
 #[account]

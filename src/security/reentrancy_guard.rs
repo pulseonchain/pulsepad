@@ -47,5 +47,4 @@ impl ReentrancyGuard {
     }
 }
 
-/// Error code for reentrancy detection
 

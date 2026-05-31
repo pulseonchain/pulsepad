@@ -16,7 +16,8 @@ pub mod utils;
 
 use instructions::*;
 use state::MigrationTarget;
-use crate::utils::Feature;
+use crate::upgrades::Feature;
+use consts::GraduationTier;
 
 // Replace with your actual program ID after `anchor build`
 declare_id!("5NLh9rQPR4EAZZpZfAJ3ujszffKjMJJCEGXxCBf4CRea");
@@ -354,12 +355,7 @@ pub mod cto_bonding {
         instructions::init_feature_flags::init_feature_flags(ctx)
     }
 
-    pub fn toggle_feature(
-        ctx: Context<ToggleFeature>,
-        feature: Feature,
-    ) -> Result<()> {
-        instructions::toggle_feature::toggle_feature(ctx, feature)
-    }
+    // Note: toggle_feature removed - use set_feature_bitmap for feature control
 
     pub fn set_feature_bitmap(
         ctx: Context<SetFeatureBitmap>,
@@ -466,7 +462,7 @@ pub mod cto_bonding {
         change: u64,
         operation: u8,
     ) -> Result<()> {
-        instructions::verify_math_operations::verify_math_operations(ctx, before, after, change, operation)
+        instructions::verify_math_ops_instruction::verify_math_operations(ctx, before, after, change, operation)
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -490,5 +486,37 @@ pub mod cto_bonding {
         ctx: Context<CancelAuthorityTransfer>,
     ) -> Result<()> {
         instructions::cancel_authority_transfer::cancel_authority_transfer(ctx)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  AGENTIC / PREBOND INSTRUCTIONS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    pub fn init_prebond(
+        ctx: Context<InitPrebond>,
+        graduation_tier: GraduationTier,
+        total_fee_bps: u64,
+        fees_to_agent: bool,
+        agent_name: String,
+        anti_snipe_enabled: bool,
+        partial_migration_pct: u8,
+    ) -> Result<()> {
+        instructions::prebond::init_prebond(ctx, graduation_tier, total_fee_bps, fees_to_agent, agent_name, anti_snipe_enabled, partial_migration_pct)
+    }
+
+    pub fn agent_claim(ctx: Context<AgentClaim>) -> Result<()> {
+        instructions::agent::agent_claim::agent_claim(ctx)
+    }
+
+    pub fn agent_buyback(ctx: Context<AgentBuyback>, sol_to_spend: u64, burn_pct: u8) -> Result<()> {
+        instructions::agent::agent_buyback::agent_buyback(ctx, sol_to_spend, burn_pct)
+    }
+
+    pub fn agent_transfer(ctx: Context<AgentTransfer>, amount: u64) -> Result<()> {
+        instructions::agent::agent_transfer::agent_transfer(ctx, amount)
+    }
+
+    pub fn claim_vault_capped(ctx: Context<ClaimVaultCapped>, amount: u64) -> Result<()> {
+        instructions::prebond::claim_vault_capped(ctx, amount)
     }
 }
