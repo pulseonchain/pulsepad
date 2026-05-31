@@ -1,7 +1,7 @@
 
 A cross-chain, agentic bonding curve protocol. The **Pulse EVM** implementation brings the same constant-product bonding curve from Solana to the EVM ecosystem — each token graduates to the most liquid DEX on its chain, with optional on-chain agents managing buybacks, fee distribution, and vault releases.
 
-Each chain gets one `PulseFactory` (immutable, no proxies). Pool creators choose a **graduation tier** (Fast/Standard/Stable), set their **fee rate** (1-5%, platform always 3/4), enable **anti-snipe** protection, optionally assign an **AI agent** to manage post-graduation operations, and configure **partial migration** for permanent buyback funds.
+Each chain gets one `PulseFactory` (immutable, no proxies). Pool creators choose a **graduation tier** (Fast/Standard/Stable), set their **fee rate**, enable **anti-snipe** protection, optionally assign an **AI agent** to manage post-graduation operations, and configure **partial migration** for permanent buyback funds.
 
 ---
 
