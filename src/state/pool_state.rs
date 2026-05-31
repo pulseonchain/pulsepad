@@ -1,62 +1,3 @@
-use anchor_lang::prelude::*;
-use crate::consts::*;
-use crate::errors::BondingError;
-
-// ─── Migration Target ─────────────────────────────────────────────────────────
-
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
-pub enum MigrationTarget {
-    RaydiumCpmm,
-    MeteoraDammV1 {
-        enable_dynamic_vault: bool,
-        lp_share: u8,
-        staker_share: u8,
-        holder_share: u8,
-    },
-    MeteoraDlmm {
-        fee_bps: u16,
-        bin_step: u16,
-        lp_share: u8,
-        staker_share: u8,
-        holder_share: u8,
-    },
-    PumpSwapBurn,
-    PumpSwapHoldLp,
-}
-
-impl MigrationTarget {
-    pub fn validate(&self) -> Result<()> {
-        match self {
-            MigrationTarget::MeteoraDammV1 { lp_share, staker_share, holder_share, .. } => {
-                let sum = (*lp_share as u16)
-                    .checked_add(*staker_share as u16)
-                    .unwrap_or(0)
-                    .checked_add(*holder_share as u16)
-                    .unwrap_or(0);
-                require!(sum == 100, BondingError::InvalidShareSum);
-            }
-            MigrationTarget::MeteoraDlmm { lp_share, staker_share, holder_share, .. } => {
-                let sum = (*lp_share as u16)
-                    .checked_add(*staker_share as u16)
-                    .unwrap_or(0)
-                    .checked_add(*holder_share as u16)
-                    .unwrap_or(0);
-                require!(sum == 100, BondingError::InvalidShareSum);
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    pub fn has_ongoing_fees(&self) -> bool {
-        !matches!(self, MigrationTarget::PumpSwapBurn)
-    }
-
-    pub fn size() -> usize {
-        1 + 5
-    }
-}
-
 // ─── Pool State ───────────────────────────────────────────────────────────────
 
 #[account]
@@ -73,6 +14,28 @@ pub struct PoolState {
     pub graduated: bool,
     pub dex_pool: Option<Pubkey>,
     pub created_at: i64,
+
+    // NEW: Tier & Anti-Snipe
+    pub graduation_tier: GraduationTier,
+    pub anti_snipe_enabled: bool,
+    pub pool_init_at: i64,
+
+    // NEW: Partial Migration
+    pub partial_migration_pct: u8,
+    pub buyback_active: bool,
+    pub buyback_sol_reserves: u64,
+    pub buyback_token_reserves: u64,
+    pub buyback_virtual_sol_reserves: u64,
+    pub buyback_virtual_token_reserves: u64,
+    pub last_buyback_at: i64,
+
+    // NEW: Agent
+    pub agent_wallet: Pubkey,
+    pub fees_to_agent: bool,
+
+    // Config
+    pub pool_fee_bps: u64,
+
     pub bump: u8,
     pub fee_vault_bump: u8,
     pub fee_recipient_bump: u8,
@@ -83,30 +46,22 @@ pub struct PoolState {
 
 impl PoolState {
     pub const ACCOUNT_SIZE: usize = 8
-        + 32   // mint
-        + 32   // creator
-        + 32   // current_authority
-        + 64   // migration_target (enum + worst-case data)
-        + 8    // virtual_sol_reserves
-        + 8    // virtual_token_reserves
-        + 8    // real_sol_reserves
-        + 8    // real_token_reserves
-        + 8    // reserve_tokens_remaining
-        + 1    // graduated
-        + 33   // dex_pool (Option<Pubkey>)
-        + 8    // created_at
-        + 1    // bump
-        + 1    // fee_vault_bump
-        + 1    // fee_recipient_bump
-        + 1    // lp_reserve_bump
-        + 1    // pool_tokens_bump
-        + 1;   // migration_vault_bump
+        + 32 + 32 + 32 + 64 + 8 + 8 + 8 + 8 + 8 + 1 + 33 + 8
+        + 1 + 1 + 8 + 1 + 1 + 8 + 8 + 8 + 8 + 8 + 32 + 1 + 8
+        + 1 + 1 + 1 + 1 + 1 + 1;
 
+    #[allow(clippy::too_many_arguments)]
     pub fn init(
         &mut self,
         mint: Pubkey,
         creator: Pubkey,
         migration_target: MigrationTarget,
+        graduation_tier: GraduationTier,
+        anti_snipe_enabled: bool,
+        partial_migration_pct: u8,
+        agent_wallet: Pubkey,
+        fees_to_agent: bool,
+        pool_fee_bps: u64,
         bump: u8,
         fee_vault_bump: u8,
         fee_recipient_bump: u8,
@@ -127,6 +82,19 @@ impl PoolState {
         self.graduated = false;
         self.dex_pool = None;
         self.created_at = now;
+        self.graduation_tier = graduation_tier;
+        self.anti_snipe_enabled = anti_snipe_enabled;
+        self.pool_init_at = 0;
+        self.partial_migration_pct = partial_migration_pct;
+        self.buyback_active = false;
+        self.buyback_sol_reserves = 0;
+        self.buyback_token_reserves = 0;
+        self.buyback_virtual_sol_reserves = 0;
+        self.buyback_virtual_token_reserves = 0;
+        self.last_buyback_at = 0;
+        self.agent_wallet = agent_wallet;
+        self.fees_to_agent = fees_to_agent;
+        self.pool_fee_bps = pool_fee_bps;
         self.bump = bump;
         self.fee_vault_bump = fee_vault_bump;
         self.fee_recipient_bump = fee_recipient_bump;
@@ -135,28 +103,45 @@ impl PoolState {
         self.migration_vault_bump = migration_vault_bump;
     }
 
-    // ── Pure constant-product pricing (no price cap) ──────────────────────────
-    // Reserve tokens (97M) are ONLY used when a single buy request exceeds
-    // the remaining bonding supply. This prevents gradual reserve drain
-    // and ensures the reserve is preserved for large buys near graduation.
+    pub fn graduation_threshold(&self) -> u64 {
+        self.graduation_tier.threshold_sol()
+    }
+
+    pub fn is_anti_snipe_active(&self, now: i64) -> bool {
+        if !self.anti_snipe_enabled || self.pool_init_at == 0 { return false; }
+        now.saturating_sub(self.pool_init_at) < ANTI_SNIPE_WINDOW_SECS
+    }
+
+    pub fn effective_virtual_sol(&self, now: i64) -> u64 {
+        if self.is_anti_snipe_active(now) {
+            let base = self.virtual_sol_reserves as u128;
+            let multiplied = base.saturating_mul(ANTI_SNIPE_MULTIPLIER_BASIS as u128).saturating_div(100);
+            multiplied.min(u64::MAX as u128) as u64
+        } else {
+            self.virtual_sol_reserves
+        }
+    }
+
+    pub fn has_partial_migration(&self) -> bool {
+        self.partial_migration_pct > 0 && self.partial_migration_pct <= 30
+    }
 
     pub fn calc_buy(&self, net_sol: u64) -> Result<u64> {
-        let vt = self.virtual_token_reserves as u128;
-        let vs = self.virtual_sol_reserves as u128;
-        let s  = net_sol as u128;
+        let now = Clock::get()?.unix_timestamp;
+        self.calc_buy_at(net_sol, now)
+    }
 
-        let tokens_out = vt
-            .checked_mul(s)
-            .ok_or(BondingError::MathOverflow)?
+    pub fn calc_buy_at(&self, net_sol: u64, now: i64) -> Result<u64> {
+        let vt = self.virtual_token_reserves as u128;
+        let vs = self.effective_virtual_sol(now) as u128;
+        let s  = net_sol as u128;
+        let tokens_out = vt.checked_mul(s).ok_or(BondingError::MathOverflow)?
             .checked_div(vs.checked_add(s).ok_or(BondingError::MathOverflow)?)
             .ok_or(BondingError::MathOverflow)? as u64;
-
-        // Reserve is only tapped when bonding is insufficient for this single buy
         let available = if tokens_out <= self.real_token_reserves {
             self.real_token_reserves
         } else {
-            self.real_token_reserves
-                .checked_add(self.reserve_tokens_remaining)
+            self.real_token_reserves.checked_add(self.reserve_tokens_remaining)
                 .ok_or(BondingError::MathOverflow)?
         };
         require!(tokens_out <= available, BondingError::InsufficientPoolTokens);
@@ -167,31 +152,21 @@ impl PoolState {
         let vs = self.virtual_sol_reserves as u128;
         let vt = self.virtual_token_reserves as u128;
         let t  = tokens_in as u128;
-
-        let sol_out = vs
-            .checked_mul(t)
-            .ok_or(BondingError::MathOverflow)?
+        let sol_out = vs.checked_mul(t).ok_or(BondingError::MathOverflow)?
             .checked_div(vt.checked_add(t).ok_or(BondingError::MathOverflow)?)
             .ok_or(BondingError::MathOverflow)? as u64;
-
         require!(sol_out <= self.real_sol_reserves, BondingError::InsufficientPoolSol);
         Ok(sol_out)
     }
 
-    /// Apply a buy: deduct from bonding first. Only tap reserve when this
-    /// single buy exceeds remaining bonding supply.
-    /// Returns (bonding_deducted, reserve_deducted) for event logging.
     pub fn apply_buy(&mut self, net_sol: u64, tokens_out: u64) -> (u64, u64) {
         self.virtual_sol_reserves = self.virtual_sol_reserves.saturating_add(net_sol);
         self.virtual_token_reserves = self.virtual_token_reserves.saturating_sub(tokens_out);
         self.real_sol_reserves = self.real_sol_reserves.saturating_add(net_sol);
-
         if tokens_out <= self.real_token_reserves {
-            // Normal case: bonding covers the full buy
             self.real_token_reserves = self.real_token_reserves.saturating_sub(tokens_out);
             (tokens_out, 0)
         } else {
-            // Large buy: exhaust bonding, take remainder from reserve
             let from_bonding = self.real_token_reserves;
             let from_reserve = tokens_out - from_bonding;
             self.real_token_reserves = 0;
@@ -209,5 +184,15 @@ impl PoolState {
 
     pub fn is_ready_to_graduate(&self, threshold: u64) -> bool {
         !self.graduated && self.real_sol_reserves >= threshold
+    }
+
+    pub fn activate_buyback(&mut self, kept_sol: u64, kept_tokens: u64) {
+        self.buyback_active = true;
+        self.buyback_sol_reserves = kept_sol;
+        self.buyback_token_reserves = kept_tokens;
+        self.buyback_virtual_sol_reserves = self.virtual_sol_reserves;
+        self.buyback_virtual_token_reserves = self.virtual_token_reserves;
+        self.virtual_sol_reserves = self.virtual_sol_reserves.saturating_sub(kept_sol);
+        self.virtual_token_reserves = self.virtual_token_reserves.saturating_add(kept_tokens);
     }
 }

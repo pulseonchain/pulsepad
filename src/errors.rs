@@ -1,8 +1,6 @@
 use anchor_lang::prelude::*;
-
-/// ═══════════════════════════════════════════════════════════════════════════
-/// CENTRALIZED ERROR CODES - All error definitions in one place
-/// ═══════════════════════════════════════════════════════════════════════════
+use crate::consts::*;
+use crate::errors::BondingError;
 
 #[error_code]
 pub enum BondingError {
@@ -69,6 +67,24 @@ pub enum BondingError {
     InvalidReferralConfig,
     #[msg("Pool stats account not initialized")]
     StatsNotInitialized,
+
+    // ── Agent / Prebond Errors ──────────────────────────────────────────────
+    #[msg("Agent wallet not configured for this pool")]
+    AgentNotConfigured,
+    #[msg("Agent claim interval not met (minimum 3 hours)")]
+    AgentClaimTooSoon,
+    #[msg("Vault claim exceeds 500K token daily cap")]
+    VaultDailyCapExceeded,
+    #[msg("Partial migration percentage must be 0, 10, 20, or 30")]
+    InvalidPartialMigrationPct,
+    #[msg("Anti-snipe window is still active — wait 3 minutes")]
+    AntiSnipeActive,
+    #[msg("Invalid graduation tier")]
+    InvalidGraduationTier,
+    #[msg("Buyback fund is empty — nothing to execute")]
+    BuybackFundEmpty,
+    #[msg("Buyback has already been executed for this window")]
+    BuybackAlreadyExecuted,
 
     // ── Security Errors ──────────────────────────────────────────────────────
     #[msg("Reentrancy detected - operation blocked")]
@@ -149,6 +165,8 @@ pub enum BondingError {
     InvalidPluginConfig,
     #[msg("Plugin not found")]
     PluginNotFound,
+    #[msg("Upgrade path is full")]
+    UpgradePathFull,
 
     // ── Compliance Errors ────────────────────────────────────────────────────
     #[msg("KYC has expired")]
@@ -165,7 +183,6 @@ pub enum BondingError {
     InvalidConfig,
 }
 
-/// Convert ShareSum error from state module
 impl From<crate::state::BondingError> for BondingError {
     fn from(_: crate::state::BondingError) -> Self {
         BondingError::InvalidShareSum
