@@ -18,6 +18,16 @@ Website: https://pulse.jelly-os.xyz/
 
 CA: BJP94VkAVHdHZZ9pBJPCWTHha3EgJjyZkeFordhXpump
 
+---
+
+## Solana
+
+DEVNET AMM **Program ID:** `B1NJQNWgWRG1A3N1nAkE7YGFeinnxwhLAPqVSXXKtB5R`
+
+DEVNET BONDING **Program ID:** `8DV5gyq2Dsy5DW5dMQtLZ5FGw657BUH2h9pZyBDcoSz3`
+
+---
+
 ## The Big Idea
 
 ```
