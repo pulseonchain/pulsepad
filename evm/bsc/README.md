@@ -5,6 +5,11 @@ BNB Smart Chain  — a constant-product bonding curve protocol built in Solidity
 
 Each chain gets one `PulseFactory`, bonded tokens can migrate to four DEX launchpads on BSC, and the entire protocol feeds into a cross-chain DAO governed by top token holders.
 
+BNB
+
+0x203a2b2a377cff93f526dc58ca879a6a1bc5ffff
+
+
 ---
 
 Website: https://pulse.jelly-os.xyz/
