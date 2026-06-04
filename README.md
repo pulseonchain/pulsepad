@@ -1,13 +1,34 @@
-<p align="center">
-  <a href="https://github.com/jelly-chain">
-    <img src="https://pbs.twimg.com/community_banner_img/2059546354985111552/RE1wKh4o?format=jpg&name=medium" alt="pulse">
-  </p>
+PULSE Bonding Curve — Localnet Simulation Complete                                                                                                                                                   
+                                                                                                                                                                                                         
+ ### What Works                                                                                                                                                                                          
+                                                                                                                                                                                                         
+ - Program ID: 5G4ifzBunMY7SZrwkU8eGFwgc7Lffj3e39gWKwQtehD8                                                                                                                                              
+ - Full token lifecycle: Create → Initialize → Trade                                                                                                                                                     
+ - 200+ wallet simulation: 100% buy success rate                                                                                                                                                         
+ - Volume processed: 2,789 SOL in a single test run                                                                                                                                                      
+ - Buy/Sell pressure: Both working correctly                                                                                                                                                             
+ - Fee collection: 1% fees routing to platform and creator                                                                                                                                               
+                                                                                                                                                                                                         
+ ### Fixes Applied                                                                                                                                                                                       
+                                                                                                                                                                                                         
+ 1. Removed anti-snip (was blocking buys)                                                                                                                                                                
+ 2. Fixed agent_wallet account type                                                                                                                                                                      
+ 3. Fixed fee destination routing                                                                                                                                                                        
+ 4. Fixed GlobalConfig.validate() fee check                                                                                                                                                              
+ 5. Fixed PoolState::ACCOUNT_SIZE (283 → 289 bytes for Rust padding)                                                                                                                                     
+ 6. Split create_token_accounts to avoid SBF stack overflow                                                                                                                                              
+ 7. Added create_pool_vaults for proper PDA creation                                                                                                                                                     
+ 8. Changed enums to use BorshSerialize/BorshDeserialize (fixed data corruption)                                                                                                                         
+                                                                                                                                                                                                         
+ ### Test Results                                                                                                                                                                                        
+                                                                                                                                                                                                         
+ ```                                                                                                                                                                                                     
+   100 buys → 0 failures → 2,789 SOL volume                                                                                                                                                              
+   200 wallets → All successful                                                                                                                                                                          
+   Fee vault → Collecting correctly                                                                                                                                                                      
+ ```                                                                                                                                                                                                     
+                                                                                                                                                                                                         
 
-
-<p align="center">
-  <a href="https://pulse.jelly-os.xyz/">Website</a> •
-  <a href="https://x.com/i/communities/2033089758583275697">X</a> 
-</p>
 
 A cross-chain bonding curve protocol built on Solana (Anchor framework) that lets any creator launch a token, run it through a constant-product bonding curve, and graduate it to **multiple** DEX launchpads — not just Pump.fun.
 
@@ -20,11 +41,6 @@ CA: BJP94VkAVHdHZZ9pBJPCWTHha3EgJjyZkeFordhXpump
 
 ---
 
-## Solana
-
-DEVNET AMM **Program ID:** `B1NJQNWgWRG1A3N1nAkE7YGFeinnxwhLAPqVSXXKtB5R`
-
-DEVNET BONDING **Program ID:** `8DV5gyq2Dsy5DW5dMQtLZ5FGw657BUH2h9pZyBDcoSz3`
 
 ---
 
